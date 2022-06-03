@@ -1,0 +1,86 @@
+---
+- hosts: dnscrypt
+  become: true
+  remote_user: emet-selch
+  tasks:
+    - name: Add DNS server repository
+      zypper_repository:
+        name: dns
+        repo: 'https://download.opensuse.org/repositories/server:/dns/openSUSE_Leap_15.3/'
+        auto_import_keys: yes
+
+    - name: Install all updates
+      zypper:
+        name: '*'
+        state: latest
+        update_cache: yes
+
+    - name: Install basic packages
+      zypper:
+        name: 
+          - firewalld
+          - htop
+          - nano
+        state: present
+
+    - name: Enable and start firewalld
+      systemd:
+        name: firewalld
+        enabled: yes
+        state: started
+
+    - name: Disable SSH root password auth
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PermitRootLogin'
+        line: 'PermitRootLogin no'
+
+    - name: Disable empty password login
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PermitEmptyPasswords' 
+        line: 'PermitEmptyPasswords no'
+
+    - name: Restart SSH server service
+      systemd: 
+        name: sshd
+        state: restarted
+        
+    - name: Install dnscrypt-proxy
+      zypper:
+        name: dnscrypt-proxy
+        state: present
+
+    - name: Replace configuration file
+      copy:
+        src: conf/dnscrypt-proxy.toml
+        dest: /etc/dnscrypt-proxy/dnscrypt-proxy.toml
+      
+    - name: Fix issue with dnscrypt-proxy not binding to port 53
+      command: dnscrypt-proxy -config /etc/dnscrypt-proxy/dnscrypt-proxy.toml -service install
+      become: true
+      become_user: root
+
+    - name: Enable DoT in firewall
+      firewalld:
+        service: dns-over-tls
+        permanent: yes
+        state: enabled
+
+    - name: Enable DNS in firewall
+      firewalld:
+        service: dns
+        permanent: yes
+        state: enabled
+
+    - name: Restart firewalld
+      systemd:
+        name: firewalld
+        state: reloaded
+
+    - name: Start and enable dnscrypt-proxy
+      systemd:
+        name: dnscrypt-proxy
+        enabled: yes
+        state: started
+        

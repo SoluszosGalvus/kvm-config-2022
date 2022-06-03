@@ -34,11 +34,11 @@ resource "libvirt_cloudinit_disk" "cloud-init" {
 
 
 data "template_file" "user_data" {
-  template = file("cloud-init.cfg")
+  template = file("cloud-init/cloud-init.cfg")
 }
 
 data "template_file" "network_config" {
-  template = file("network.cfg")
+  template = file("cloud-init/network.cfg")
 }
 
 resource "libvirt_domain" "vm" {
@@ -63,4 +63,16 @@ resource "libvirt_domain" "vm" {
     listen_type = "address"
     autoport = "true"
   }
+  provisioner "local-exec" {
+    command = "sleep 20"
+  }
+}
+
+resource "null_resource" "ansible" {
+  provisioner "local-exec" {
+    command = "ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ../inv.ini playbook.yml"
+  }
+  depends_on = [
+    libvirt_domain.vm
+  ]
 }
